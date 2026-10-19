@@ -30,8 +30,10 @@ export default async function handler(req,res){
     }
     const products=await Promise.all(IDS.map(async id=>{
       const p=await get(BASE+'/entity/product/'+id);
-      const sale=p.salePrices?.find(x=>x.priceType?.name==='Цена продажи')||p.salePrices?.[0];
-      return {id,name:p.name,article:p.article||'',code:p.code||'',price:sale&&Number.isFinite(sale.value)?sale.value/100:null,stock:stockById.get(id)??0};
+      const prices=Array.isArray(p.salePrices)?p.salePrices:[];
+      const nonzero=prices.filter(x=>Number.isFinite(x.value)&&x.value>0);
+      const sale=nonzero.find(x=>/^(цена продажи|розничная цена|розничная)$/i.test(x.priceType?.name?.trim()||''))||nonzero.find(x=>/продаж|рознич/i.test(x.priceType?.name||''))||nonzero[0]||null;
+      return {id,name:p.name,article:p.article||'',code:p.code||'',price:sale?sale.value/100:null,stock:stockById.get(id)??0};
     }));
     return res.status(200).json({warehouse:'Береке базар',products,updatedAt:new Date().toISOString()});
   }catch(e){return res.status(502).json({error:'Could not load warehouse stock and prices',detail:/MoySklad HTTP \d+/.test(e.message)?e.message:undefined});}
