@@ -11,7 +11,7 @@ export default async function handler(req, res) {
   if (!token) return res.status(503).json({ error: 'MOYSKLAD_TOKEN is not configured' });
   try {
     const upstream = await fetch('https://api.moysklad.ru/api/remap/1.2/entity/store?limit=100', {
-      headers: { Authorization: `Bearer ${token.trim()}`, Accept: 'application/json' },
+      headers: { Authorization: `Bearer ${token.trim()}`, Accept: 'application/json;charset=utf-8' },
       signal: AbortSignal.timeout(12000)
     });
     if (!upstream.ok) {
