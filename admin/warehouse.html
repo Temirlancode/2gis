@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>Выбор склада — Карта продаж</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,sans-serif}*{box-sizing:border-box}body{margin:0;background:#101318;color:#f3f4f6;padding:24px}main{max-width:720px;margin:40px auto}h1{font-size:clamp(25px,4vw,34px)}p,small{color:#aeb6c2;line-height:1.5}section{background:#1b2029;border:1px solid #343b48;border-radius:16px;padding:20px;margin:18px 0}label{display:block;margin-bottom:8px}input{width:100%;background:#0e1116;border:1px solid #5b6473;border-radius:9px;padding:13px;color:white;font-size:16px}button{border:0;background:#63b3ff;color:#08121d;padding:12px 17px;border-radius:9px;font-size:15px;font-weight:650;cursor:pointer}button:disabled{opacity:.5;cursor:wait}.muted{background:#303b4c;color:white}.item{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid #343b48}.item input{width:auto;accent-color:#63b3ff}.item label{margin:0;flex:1;cursor:pointer}.item small{display:block}#status{min-height:22px}code{overflow-wrap:anywhere}a{color:#8cc8ff}.hidden{display:none}
+</style></head><body><main>
+<h1>Выбор главного склада</h1>
+<p>«Карта продаж» · МойСклад. Здесь можно безопасно запросить список складов и выбрать нужный. Эта страница не сохраняет ключ или выбор на сервере.</p>
+<section><form id="form"><label for="key">ADMIN_SETUP_KEY из Vercel</label>
+<input id="key" type="password" required autocomplete="off" spellcheck="false" placeholder="Введите ключ администратора">
+<p><small>Ключ остаётся в памяти этой вкладки и отправляется только на защищённую функцию вашего сайта. Не присылайте его в чат.</small></p>
+<button id="load" type="submit">Получить склады</button></form><p id="status" role="status" aria-live="polite"></p></section>
+<section id="results" class="hidden"><h2>Выберите склад</h2><div id="list"></div><div id="chosen" class="hidden">
+<p><strong>Идентификатор выбранного склада:</strong></p><code id="warehouseId"></code>
+<p><button id="copy" type="button">Скопировать ID</button></p>
+<p>Следующий шаг: откройте Vercel → проект → Environment Variables и добавьте переменную <code>MOYSKLAD_WAREHOUSE_ID</code> со скопированным ID для Production. Затем выполните новое развёртывание. Это пока не включает синхронизацию товаров — её добавим отдельно.</p>
+</div></section><p><a href="/">← Вернуться на карту</a></p>
+</main><script>
+const form=document.getElementById('form'), status=document.getElementById('status'), list=document.getElementById('list'), results=document.getElementById('results'), chosen=document.getElementById('chosen'), idEl=document.getElementById('warehouseId'), load=document.getElementById('load');
+form.addEventListener('submit',async e=>{
+ e.preventDefault();status.textContent='Загружаем склады…';load.disabled=true;results.classList.add('hidden');chosen.classList.add('hidden');list.replaceChildren();
+ const key=document.getElementById('key').value;
+ try{
+  const response=await fetch('/api/moysklad/warehouses',{headers:{Authorization:'Bearer '+key},cache:'no-store'});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(response.status===401?'Неверный ADMIN_SETUP_KEY.':data.error||'Ошибка HTTP '+response.status);
+  if(data.hasMore)status.textContent='Внимание: список может быть неполным (более 100 складов).';
+  else status.textContent='Склады получены. Выберите нужный.';
+  results.classList.remove('hidden');
+  if(!data.warehouses?.length){list.textContent='Склады не найдены.';return}
+  data.warehouses.forEach(s=>{
+   const row=document.createElement('div');row.className='item';
+   const radio=document.createElement('input');radio.type='radio';radio.name='warehouse';radio.id='w-'+s.id;radio.disabled=s.archived;
+   const label=document.createElement('label');label.htmlFor=radio.id;label.textContent=s.name;
+   const detail=document.createElement('small');detail.textContent=s.archived?'Архивный склад — недоступен':'ID: '+s.id;label.append(detail);
+   radio.addEventListener('change',()=>{idEl.textContent=s.id;chosen.classList.remove('hidden')});
+   row.append(radio,label);list.append(row);
+  });
+ }catch(err){status.textContent=err.message||'Ошибка подключения';}
+ finally{load.disabled=false;document.getElementById('key').value='';}
+});
+document.getElementById('copy').addEventListener('click',async()=>{
+ try{await navigator.clipboard.writeText(idEl.textContent);document.getElementById('copy').textContent='Скопировано';}
+ catch{document.getElementById('copy').textContent='Выделите ID и скопируйте вручную';}
+});
+</script></body></html>
