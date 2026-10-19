@@ -11,10 +11,22 @@ export default async function handler(req, res) {
   if (!token) return res.status(503).json({ error: 'MOYSKLAD_TOKEN is not configured' });
   try {
     const upstream = await fetch('https://api.moysklad.ru/api/remap/1.2/entity/store?limit=100', {
-      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      headers: { Authorization: `Bearer ${token.trim()}`, Accept: 'application/json' },
       signal: AbortSignal.timeout(12000)
     });
-    if (!upstream.ok) return res.status(502).json({ error: 'MoySklad request failed', status: upstream.status });
+    if (!upstream.ok) {
+      let moyskladCode = null;
+      try {
+        const body = await upstream.json();
+        const candidate = body?.errors?.[0]?.code;
+        if (Number.isSafeInteger(candidate)) moyskladCode = candidate;
+      } catch {}
+      return res.status(502).json({
+        error: 'MoySklad request failed',
+        status: upstream.status,
+        ...(moyskladCode === null ? {} : { moyskladCode })
+      });
+    }
     const body = await upstream.json();
     return res.status(200).json({
       warehouses: (body.rows || []).map(s => ({
