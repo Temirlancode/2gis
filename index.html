@@ -128,6 +128,11 @@ async function refreshShift(){
  const [a,b]=await Promise.all([c.from('sales_map_shifts').select('*').eq('seller_id',u).order('started_at',{ascending:false}).limit(1),c.from('sales_map_vehicle_stock').select('*').eq('seller_id',u)]);
  if(a.error||b.error)throw Error('Выполните SQL из supabase/seller_shifts.sql');
  lastShift=a.data[0]||null;activeShift=lastShift&&!lastShift.ended_at?lastShift:null;vehicleStock=Object.fromEntries(b.data.map(x=>[x.product,x.qty]));
+ if(activeShift?.vehicle_id){
+  const car=await c.from('sales_map_car_stock').select('product,qty').eq('vehicle_id',activeShift.vehicle_id);
+  if(car.error)throw Error('Выполните SQL из supabase/car_stock.sql');
+  vehicleStock=Object.fromEntries((car.data||[]).map(x=>[x.product,x.qty]));
+ }
  shiftMovements=[];if(lastShift){const m=await c.from('sales_map_stock_movements').select('*').eq('shift_id',lastShift.id).order('created_at');if(m.error)throw m.error;shiftMovements=m.data}
 }
 async function shiftRpc(name,args){const r=await window.salesMapSupabase.rpc(name,args||{});if(r.error)throw r.error;return r.data}
@@ -140,9 +145,9 @@ async function showShift(){
  const sold=sales.filter(x=>x.qty>0),gross=sold.reduce((a,x)=>a+x.qty*x.price,0),paid=sales.reduce((a,x)=>a+x.paid,0);
  const minutes=lastShift?Math.max(0,Math.floor((new Date(lastShift.ended_at||Date.now())-new Date(lastShift.started_at))/60000)):0;
  const stats=lastShift?'<div class="notice"><strong>Итоги смены</strong><p>Время: '+Math.floor(minutes/60)+' ч '+minutes%60+' мин</p><p>Продано: '+sold.reduce((a,x)=>a+x.qty,0)+' шт. · Сумма: '+money(gross)+'</p><p>Получено денег (включая погашения долгов): '+money(paid)+'</p><p>Долг по продажам: '+money(sold.reduce((a,x)=>a+x.qty*x.price-x.paid,0))+'</p></div>':'';
- const rows=activeShift?.vehicle_id?'<div class="notice">⚠️ Остатки выбранной машины пока не подключены. Показ остатков продавца отключён. Не проводите загрузки и продажи до обновления складского учёта.</div>':goods.map(g=>'<div class="item">'+esc(g.name)+' — <b>'+esc(vehicleStock[g.id]||0)+' '+esc(g.unit)+'</b></div>').join('');
+ const rows=goods.map(g=>'<div class="item">'+esc(g.name)+' — <b>'+esc(vehicleStock[g.id]||0)+' '+esc(g.unit)+'</b></div>').join('');
  const moves=shiftMovements.map(m=>'<div class="item">'+(m.direction==='load'?'Загрузка':'Возврат')+' · '+esc(goods.find(g=>g.id===m.product)?.name||m.product)+' · '+m.qty+' · '+esc(new Date(m.created_at).toLocaleString('ru-RU'))+'</div>').join('');
- openPanel('<h2>🚚 Моя линия</h2><div class="notice">'+(activeShift?'🟢 На линии':'⚪ Не на линии')+'</div><h3>Товар в машине</h3>'+rows+'<div class="notice">⚠️ Остатки ведутся в приложении. Перемещения и продажи пока НЕ отправляются в МойСклад.</div>'+stats+(activeShift?'<div class="actions"><button onclick="showMoveStock(\'load\')">＋ Загрузить</button><button class="secondary" onclick="showMoveStock(\'return\')">↩ Вернуть на склад</button><button onclick="finishShift()">Выйти с линии</button></div>':'<button onclick="startShift()">На линию</button>')+(moves?'<h3>Загрузки и возвраты</h3>'+moves:''));
+ openPanel('<h2>🚚 Моя линия</h2>'+(activeShift?.vehicle_id?'<div class="notice">Машина: '+esc({'vehicle-1':'Машина №1','vehicle-2':'Машина №2','vehicle-3':'Машина №3'}[activeShift.vehicle_id]||activeShift.vehicle_id)+'</div><div class="notice">⚠️ Нулевые остатки — начальные учётные значения, пока не проведена сверка с МойСклад. Продажи и перемещения ещё не подключены.</div>':'')+'<div class="notice">'+(activeShift?'🟢 На линии':'⚪ Не на линии')+'</div><h3>Товар в машине</h3>'+rows+'<div class="notice">⚠️ Остатки ведутся в приложении. Перемещения и продажи пока НЕ отправляются в МойСклад.</div>'+stats+(activeShift?'<div class="actions"><button onclick="showMoveStock(\'load\')">＋ Загрузить</button><button class="secondary" onclick="showMoveStock(\'return\')">↩ Вернуть на склад</button><button onclick="finishShift()">Выйти с линии</button></div>':'<button onclick="startShift()">На линию</button>')+(moves?'<h3>Загрузки и возвраты</h3>'+moves:''));
  }catch(e){openPanel('<h2>Моя линия</h2><p class="danger">'+esc(e.message||e)+'</p>')}
 }
 async function startShift(){
