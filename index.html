@@ -116,26 +116,6 @@ async function showBuildingInfo(lon,lat){
   }
 }
 // Recognize taps on the visible upper head of the pin, independently of MapGL click dispatch.
-function pinTouchDebug(message){
-  let box=document.getElementById('pinTouchDebug');
-  if(!box){box=document.createElement('div');box.id='pinTouchDebug';box.style.cssText='position:fixed;top:68px;left:10px;right:10px;z-index:99999;background:#111e;color:#fff;padding:9px 12px;border-radius:9px;font:13px/1.4 sans-serif;pointer-events:none';document.body.appendChild(box)}
-  box.textContent='Диагностика метки: '+message;
-}
-function drawPinHitDebug(x,y){
-  document.querySelectorAll('.pin-debug-outline').forEach(n=>n.remove());
-  const dot=document.createElement('div');dot.className='pin-debug-outline';
-  dot.style.cssText='position:fixed;z-index:99998;pointer-events:none;border:3px solid red;background:#ff000044;border-radius:50%;width:18px;height:18px;left:'+(x-9)+'px;top:'+(y-9)+'px';
-  document.body.appendChild(dot);
-  let count=0;
-  for(const marker of markers){
-    const el=marker.__salesElement;if(!el)continue;
-    const r=el.getBoundingClientRect();if(!r.width||!r.height)continue;
-    const outline=document.createElement('div');outline.className='pin-debug-outline';
-    outline.style.cssText='position:fixed;z-index:99997;pointer-events:none;border:2px dashed #e11d48;background:#e11d481a;left:'+(r.left-42)+'px;top:'+(r.top-115)+'px;width:'+(r.width+84)+'px;height:'+(r.height+137)+'px';
-    document.body.appendChild(outline);count++;
-  }
-  pinTouchDebug('касание ('+Math.round(x)+','+Math.round(y)+'); рамок: '+count+'; магазинов: '+data.locations.length+'; MapGL меток: '+markers.length+'; DOM меток: '+document.querySelectorAll('.marker').length);
-}
 function installPinTouchHitTest(){
   // iOS/MapGL can deliver pointerup without the matching pointerdown.
   // Use a document-level touchend fallback and the actual visible pin rectangle.
@@ -182,17 +162,14 @@ function installPinTouchHitTest(){
     return hit;
   };
   let start=null,lastOpened=0;
-  pinTouchDebug('готова — коснитесь синей метки');
   document.addEventListener('pointerdown',e=>{
     if(addingPoint||e.button>0)return;
     const hit=findPin(e.clientX,e.clientY);
     if(hit){
       lastOpened=Date.now();
-      pinTouchDebug('касание метки: '+hit.name);
       e.preventDefault();e.stopImmediatePropagation();
       showLocation(hit.id);
     }else if($('map').contains(e.target)){
-      drawPinHitDebug(e.clientX,e.clientY);
     }
   },true);
 
@@ -206,14 +183,13 @@ function installPinTouchHitTest(){
     if(start&&(Math.hypot(t.clientX-start.x,t.clientY-start.y)>18||Date.now()-start.time>1200)){start=null;return}
     start=null;
     const hit=findPin(t.clientX,t.clientY);
-    if(hit){lastOpened=Date.now();pinTouchDebug('открыта точка '+hit.name);e.preventDefault();e.stopImmediatePropagation();showLocation(hit.id)}
-    else pinTouchDebug('касание вне метки');
+    if(hit){lastOpened=Date.now();e.preventDefault();e.stopImmediatePropagation();showLocation(hit.id)}
   },{capture:true,passive:false});
   document.addEventListener('click',e=>{
     if(Date.now()-lastOpened<550){e.preventDefault();e.stopImmediatePropagation();return}
     if(addingPoint)return;
     const hit=findPin(e.clientX,e.clientY);
-    if(hit){e.preventDefault();e.stopImmediatePropagation();pinTouchDebug('открыта точка '+hit.name);showLocation(hit.id)}
+    if(hit){e.preventDefault();e.stopImmediatePropagation();showLocation(hit.id)}
   },true);
 }
 function initMap(){if(!data.key)return;let script=document.createElement('script');script.src='https://mapgl.2gis.com/api/js/v1';script.onload=()=>{try{window.mapglMap=mapglMap=new mapgl.Map('map',{center:[76.8897,43.2389],zoom:12,key:data.key});$('demo').remove();$('demoNote').remove();mapglMap.on('click',e=>{const coords=e.lngLat;if(!coords)return;const zoom=typeof mapglMap.getZoom==='function'?mapglMap.getZoom():12;const metersPerPixel=156543.03392*Math.cos(coords[1]*Math.PI/180)/Math.pow(2,zoom);const tolerance=Math.max(20,Math.min(5000,44*metersPerPixel));let closest=null,dist=Infinity;const mapRect=$('map').getBoundingClientRect();const tap=e.originalEvent;const tapX=Number.isFinite(tap?.clientX)?tap.clientX:mapRect.left+(e.point?.[0]??-9999);const tapY=Number.isFinite(tap?.clientY)?tap.clientY:mapRect.top+(e.point?.[1]??-9999);if(Number.isFinite(tapX)&&Number.isFinite(tapY)){for(const marker of markers){const el=marker.__salesElement;if(!el)continue;const r=el.getBoundingClientRect();if(!r.width||!r.height)continue;const dx=Math.max(r.left-tapX,0,tapX-r.right),dy=Math.max(r.top-tapY,0,tapY-r.bottom);const pixels=Math.hypot(dx,dy);if(pixels<dist&&pixels<=28){dist=pixels;closest=marker.__salesLocation}}}if(!closest){for(const l of data.locations){if(!Number.isFinite(+l.lat)||!Number.isFinite(+l.lon))continue;const dy=(+l.lat-coords[1])*111320;const dx=(+l.lon-coords[0])*111320*Math.cos(coords[1]*Math.PI/180);const d=Math.hypot(dx,dy);if(d<dist){closest=l;dist=d}}}if(addingPoint){pending={lon:coords[0],lat:coords[1]};openAdd();return}if(closest&&(dist<=tolerance||dist<=28)){showLocation(closest.id);return}showBuildingInfo(coords[0],coords[1])});renderPins()}catch(e){$('demoNote').textContent='Не удалось подключить 2ГИС: '+e.message}};script.onerror=()=>{$('demoNote').textContent='Не удалось загрузить библиотеку 2ГИС. Проверьте интернет и ключ.'};document.head.appendChild(script)}
