@@ -8,13 +8,16 @@ module.exports=async function handler(req,res){
   try{
     const url=new URL('https://catalog.api.2gis.com/3.0/items/geocode');
     url.searchParams.set('lon',String(lon));url.searchParams.set('lat',String(lat));
-    url.searchParams.set('type','building');url.searchParams.set('fields','items.address,items.point');
+    url.searchParams.set('type','building');url.searchParams.set('radius','30');url.searchParams.set('fields','items.adm_div,items.address');
     url.searchParams.set('key',key);
     const upstream=await fetch(url,{signal:AbortSignal.timeout(8000)});
     const body=await upstream.json();
     if(!upstream.ok||body.meta?.code&&body.meta.code!==200){
-      console.error('2GIS geocode status',upstream.status,body.meta?.code);
-      return res.status(502).json({error:'2ГИС не вернул данные. Проверьте доступ ключа к Geocoder API'});
+      const code=body.meta?.code;const reason=String(body.meta?.error?.message||body.meta?.error?.type||body.error?.message||'').slice(0,200);
+      console.error('2GIS geocode status',upstream.status,code,reason);
+      const authFailure=[401,403].includes(upstream.status)||[401,403].includes(code);
+      const badRequest=upstream.status===400||code===400;
+      return res.status(502).json({error:authFailure?'Ключ 2ГИС не имеет доступа к Geocoder API (401/403). Проверьте разрешения в кабинете 2ГИС.':badRequest?'2ГИС отклонил параметры запроса (400). Проверьте настройки Geocoder API.':'Сервис 2ГИС вернул ошибку (HTTP '+upstream.status+', код '+(code||'не указан')+').'});
     }
     const item=body.result?.items?.[0];
     const address=item?.address_name||item?.full_name||item?.address?.name||'';
