@@ -31,17 +31,17 @@ alter table public.sales_map_shifts enable row level security;
 alter table public.sales_map_vehicle_stock enable row level security;
 alter table public.sales_map_stock_movements enable row level security;
 drop policy if exists shifts_read on public.sales_map_shifts;
-create policy shifts_read on public.sales_map_shifts for select to authenticated using (seller_id=auth.uid() or exists(select 1 from public.user_profiles p where p.id=auth.uid() and p.role='admin'));
+create policy shifts_read on public.sales_map_shifts for select to authenticated using (seller_id=auth.uid() or exists(select 1 from public.user_profiles p where p.user_id=auth.uid() and p.role='admin'));
 drop policy if exists vehicle_read on public.sales_map_vehicle_stock;
-create policy vehicle_read on public.sales_map_vehicle_stock for select to authenticated using (seller_id=auth.uid() or exists(select 1 from public.user_profiles p where p.id=auth.uid() and p.role='admin'));
+create policy vehicle_read on public.sales_map_vehicle_stock for select to authenticated using (seller_id=auth.uid() or exists(select 1 from public.user_profiles p where p.user_id=auth.uid() and p.role='admin'));
 drop policy if exists movements_read on public.sales_map_stock_movements;
-create policy movements_read on public.sales_map_stock_movements for select to authenticated using (seller_id=auth.uid() or exists(select 1 from public.user_profiles p where p.id=auth.uid() and p.role='admin'));
+create policy movements_read on public.sales_map_stock_movements for select to authenticated using (seller_id=auth.uid() or exists(select 1 from public.user_profiles p where p.user_id=auth.uid() and p.role='admin'));
 -- No direct INSERT/UPDATE/DELETE policies: writes only via locked SECURITY DEFINER RPC.
 create or replace function public.sales_map_start_shift()
 returns uuid language plpgsql security definer set search_path=public as $$
 declare sid uuid; role_name text;
 begin
- select role into role_name from public.user_profiles where id=auth.uid();
+ select role into role_name from public.user_profiles where user_id=auth.uid();
  if role_name not in ('seller','admin') then raise exception 'Access denied'; end if;
  perform pg_advisory_xact_lock(hashtext(auth.uid()::text));
  select id into sid from public.sales_map_shifts where seller_id=auth.uid() and ended_at is null;
