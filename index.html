@@ -151,6 +151,30 @@ function installPinTouchHitTest(){
       const distance=Math.hypot(dx,dy);
       if(distance<best&&distance<=8){best=distance;hit=marker.__salesLocation}
     }
+    if(hit||!mapglMap)return hit;
+    // MapGL may render marker elements in a shadow tree. Project stored coordinates
+    // instead of relying on detached/inaccessible DOM nodes.
+    const mapRect=$('map').getBoundingClientRect();
+    const center=mapglMap.getCenter();
+    const zoom=mapglMap.getZoom();
+    const scale=256*Math.pow(2,zoom);
+    const merc=(lon,lat)=>{
+      const clamped=Math.max(-85.05112878,Math.min(85.05112878,Number(lat)));
+      const sin=Math.sin(clamped*Math.PI/180);
+      return [((Number(lon)+180)/360)*scale,(0.5-Math.log((1+sin)/(1-sin))/(4*Math.PI))*scale];
+    };
+    const c=merc(center[0],center[1]);
+    const tapX=x-mapRect.left-mapRect.width/2;
+    const tapY=y-mapRect.top-mapRect.height/2;
+    for(const location of data.locations){
+      if(!Number.isFinite(Number(location.lon))||!Number.isFinite(Number(location.lat)))continue;
+      const p=merc(location.lon,location.lat);
+      const dx=p[0]-c[0]-tapX;
+      const dy=p[1]-c[1]-tapY;
+      // Marker head is above the geographic anchor/tip.
+      const distance=Math.hypot(dx,dy-27);
+      if(distance<best&&distance<=40){best=distance;hit=location}
+    }
     return hit;
   };
   let start=null,lastOpened=0;
