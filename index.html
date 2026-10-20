@@ -172,8 +172,12 @@ function installPinTouchHitTest(){
       const dx=p[0]-c[0]-tapX;
       const dy=p[1]-c[1]-tapY;
       // Marker head is above the geographic anchor/tip.
-      const distance=Math.hypot(dx,dy-27);
-      if(distance<best&&distance<=40){best=distance;hit=location}
+      const horizontal=Math.abs(dx);
+      const vertical=Math.abs(dy-27);
+      // Narrow horizontal hit area to avoid selecting adjacent shops.
+      // Keep enough vertical tolerance for the visible pin head.
+      const distance=Math.hypot(horizontal,vertical);
+      if(horizontal<=19&&vertical<=35&&distance<best){best=distance;hit=location}
     }
     return hit;
   };
