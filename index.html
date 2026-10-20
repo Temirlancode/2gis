@@ -117,9 +117,9 @@ async function showBuildingInfo(lon,lat){
 }
 // Recognize taps on the visible upper head of the pin, independently of MapGL click dispatch.
 function installPinTouchHitTest(){
-  const surface=$('map');let start=null;
+  const surface=document;let start=null;
   surface.addEventListener('pointerdown',e=>{
-    if(e.pointerType==='mouse'||addingPoint){start=null;return}
+    if(e.pointerType==='mouse'||addingPoint||!$('map').contains(e.target)){start=null;return}
     start={x:e.clientX,y:e.clientY,time:Date.now()};
   },true);
   surface.addEventListener('pointerup',e=>{
@@ -131,13 +131,13 @@ function installPinTouchHitTest(){
       const el=marker.__salesElement;if(!el)continue;
       const r=el.getBoundingClientRect();if(!r.width||!r.height)continue;
       // Top/head gets the same generous hit area as the tail.
-      const left=r.left-14,right=r.right+14,top=r.top-18,bottom=r.bottom+12;
+      const left=r.left-18,right=r.right+18,top=r.top-22,bottom=r.bottom+16;
       const dx=Math.max(left-e.clientX,0,e.clientX-right);
       const dy=Math.max(top-e.clientY,0,e.clientY-bottom);
       const distance=Math.hypot(dx,dy);
       if(distance<best&&distance<=8){best=distance;hit=marker.__salesLocation}
     }
-    if(hit){e.preventDefault();e.stopPropagation();showLocation(hit.id)}
+    if(hit){e.preventDefault();e.stopImmediatePropagation();showLocation(hit.id)}
   },true);
   surface.addEventListener('pointercancel',()=>{start=null},true);
 }
