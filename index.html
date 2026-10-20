@@ -145,7 +145,27 @@ async function showShift(){
  openPanel('<h2>🚚 Моя линия</h2><div class="notice">'+(activeShift?'🟢 На линии':'⚪ Не на линии')+'</div><h3>Товар в машине</h3>'+rows+'<div class="notice">⚠️ Остатки ведутся в приложении. Перемещения и продажи пока НЕ отправляются в МойСклад.</div>'+stats+(activeShift?'<div class="actions"><button onclick="showMoveStock(\'load\')">＋ Загрузить</button><button class="secondary" onclick="showMoveStock(\'return\')">↩ Вернуть на склад</button><button onclick="finishShift()">Выйти с линии</button></div>':'<button onclick="startShift()">На линию</button>')+(moves?'<h3>Загрузки и возвраты</h3>'+moves:''));
  }catch(e){openPanel('<h2>Моя линия</h2><p class="danger">'+esc(e.message||e)+'</p>')}
 }
-async function startShift(){try{await shiftRpc('sales_map_start_shift');await showShift()}catch(e){alert(e.message)}}
+async function startShift(){
+ try{
+  const c=window.salesMapSupabase;
+  if(!c)throw Error('Сначала войдите');
+  const [v,sh]=await Promise.all([
+   c.from('sales_map_vehicles').select('id,name').order('name'),
+   c.from('sales_map_shifts').select('vehicle_id,seller_id').is('ended_at',null)
+  ]);
+  if(v.error)throw v.error;
+  if(sh.error)throw sh.error;
+  const busy=new Set((sh.data||[]).filter(x=>x.seller_id!==window.salesMapAuth?.userId).map(x=>x.vehicle_id));
+  const available=(v.data||[]).filter(x=>!busy.has(x.id));
+  if(!available.length)return alert('Все машины заняты');
+  openPanel('<h2>Выберите машину</h2><p>Машина закрепляется только на время смены.</p><form onsubmit="event.preventDefault();confirmVehicleShift(event.target)"><label class="field">Машина<select name="vehicle" required>'+available.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+'</option>').join('')+'</select></label><button>На линию</button><button type="button" class="secondary" onclick="showShift()">Отмена</button></form>');
+ }catch(e){alert(e.message||e)}
+}
+async function confirmVehicleShift(f){
+ const b=f.querySelector('button');b.disabled=true;
+ try{await shiftRpc('sales_map_start_vehicle_shift',{p_vehicle_id:f.vehicle.value});await showShift()}
+ catch(e){alert(e.message||e)}finally{b.disabled=false}
+}
 function showMoveStock(direction){
  if(!activeShift)return showShift();
  const options=goods.map(g=>'<option value="'+g.id+'">'+esc(g.name)+' (в машине: '+(vehicleStock[g.id]||0)+')</option>').join('');
