@@ -115,6 +115,32 @@ async function showBuildingInfo(lon,lat){
     openPanel('<h2>Место на карте</h2><p class="muted">Не удалось получить сведения 2ГИС: '+esc(error.message)+'</p><p>Координаты: '+lat.toFixed(5)+', '+lon.toFixed(5)+'</p>');
   }
 }
+// Recognize taps on the visible upper head of the pin, independently of MapGL click dispatch.
+function installPinTouchHitTest(){
+  const surface=$('map');let start=null;
+  surface.addEventListener('pointerdown',e=>{
+    if(e.pointerType==='mouse'||addingPoint){start=null;return}
+    start={x:e.clientX,y:e.clientY,time:Date.now()};
+  },true);
+  surface.addEventListener('pointerup',e=>{
+    if(!start||addingPoint)return;
+    const down=start;start=null;
+    if(Math.hypot(e.clientX-down.x,e.clientY-down.y)>15||Date.now()-down.time>900)return;
+    let hit=null,best=Infinity;
+    for(const marker of markers){
+      const el=marker.__salesElement;if(!el)continue;
+      const r=el.getBoundingClientRect();if(!r.width||!r.height)continue;
+      // Top/head gets the same generous hit area as the tail.
+      const left=r.left-14,right=r.right+14,top=r.top-18,bottom=r.bottom+12;
+      const dx=Math.max(left-e.clientX,0,e.clientX-right);
+      const dy=Math.max(top-e.clientY,0,e.clientY-bottom);
+      const distance=Math.hypot(dx,dy);
+      if(distance<best&&distance<=8){best=distance;hit=marker.__salesLocation}
+    }
+    if(hit){e.preventDefault();e.stopPropagation();showLocation(hit.id)}
+  },true);
+  surface.addEventListener('pointercancel',()=>{start=null},true);
+}
 function initMap(){if(!data.key)return;let script=document.createElement('script');script.src='https://mapgl.2gis.com/api/js/v1';script.onload=()=>{try{window.mapglMap=mapglMap=new mapgl.Map('map',{center:[76.8897,43.2389],zoom:12,key:data.key});$('demo').remove();$('demoNote').remove();mapglMap.on('click',e=>{const coords=e.lngLat;if(!coords)return;const zoom=typeof mapglMap.getZoom==='function'?mapglMap.getZoom():12;const metersPerPixel=156543.03392*Math.cos(coords[1]*Math.PI/180)/Math.pow(2,zoom);const tolerance=Math.max(20,Math.min(5000,44*metersPerPixel));let closest=null,dist=Infinity;const mapRect=$('map').getBoundingClientRect();const tap=e.originalEvent;const tapX=Number.isFinite(tap?.clientX)?tap.clientX:mapRect.left+(e.point?.[0]??-9999);const tapY=Number.isFinite(tap?.clientY)?tap.clientY:mapRect.top+(e.point?.[1]??-9999);if(Number.isFinite(tapX)&&Number.isFinite(tapY)){for(const marker of markers){const el=marker.__salesElement;if(!el)continue;const r=el.getBoundingClientRect();if(!r.width||!r.height)continue;const dx=Math.max(r.left-tapX,0,tapX-r.right),dy=Math.max(r.top-tapY,0,tapY-r.bottom);const pixels=Math.hypot(dx,dy);if(pixels<dist&&pixels<=28){dist=pixels;closest=marker.__salesLocation}}}if(!closest){for(const l of data.locations){if(!Number.isFinite(+l.lat)||!Number.isFinite(+l.lon))continue;const dy=(+l.lat-coords[1])*111320;const dx=(+l.lon-coords[0])*111320*Math.cos(coords[1]*Math.PI/180);const d=Math.hypot(dx,dy);if(d<dist){closest=l;dist=d}}}if(addingPoint){pending={lon:coords[0],lat:coords[1]};openAdd();return}if(closest&&(dist<=tolerance||dist<=28)){showLocation(closest.id);return}showBuildingInfo(coords[0],coords[1])});renderPins()}catch(e){$('demoNote').textContent='Не удалось подключить 2ГИС: '+e.message}};script.onerror=()=>{$('demoNote').textContent='Не удалось загрузить библиотеку 2ГИС. Проверьте интернет и ключ.'};document.head.appendChild(script)}
-nav();renderPins();initMap();
+nav();renderPins();installPinTouchHitTest();initMap();
 </script></body></html>
