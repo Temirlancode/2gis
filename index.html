@@ -121,6 +121,21 @@ function pinTouchDebug(message){
   if(!box){box=document.createElement('div');box.id='pinTouchDebug';box.style.cssText='position:fixed;top:68px;left:10px;right:10px;z-index:99999;background:#111e;color:#fff;padding:9px 12px;border-radius:9px;font:13px/1.4 sans-serif;pointer-events:none';document.body.appendChild(box)}
   box.textContent='Диагностика метки: '+message;
 }
+function drawPinHitDebug(x,y){
+  document.querySelectorAll('.pin-debug-outline').forEach(n=>n.remove());
+  const dot=document.createElement('div');dot.className='pin-debug-outline';
+  dot.style.cssText='position:fixed;z-index:99998;pointer-events:none;border:3px solid red;background:#ff000044;border-radius:50%;width:18px;height:18px;left:'+(x-9)+'px;top:'+(y-9)+'px';
+  document.body.appendChild(dot);
+  let count=0;
+  for(const marker of markers){
+    const el=marker.__salesElement;if(!el)continue;
+    const r=el.getBoundingClientRect();if(!r.width||!r.height)continue;
+    const outline=document.createElement('div');outline.className='pin-debug-outline';
+    outline.style.cssText='position:fixed;z-index:99997;pointer-events:none;border:2px dashed #e11d48;background:#e11d481a;left:'+(r.left-42)+'px;top:'+(r.top-115)+'px;width:'+(r.width+84)+'px;height:'+(r.height+137)+'px';
+    document.body.appendChild(outline);count++;
+  }
+  pinTouchDebug('касание ('+Math.round(x)+','+Math.round(y)+'); рамок меток: '+count);
+}
 function installPinTouchHitTest(){
   // iOS/MapGL can deliver pointerup without the matching pointerdown.
   // Use a document-level touchend fallback and the actual visible pin rectangle.
@@ -149,7 +164,7 @@ function installPinTouchHitTest(){
       e.preventDefault();e.stopImmediatePropagation();
       showLocation(hit.id);
     }else if($('map').contains(e.target)){
-      pinTouchDebug('касание карты, метка не найдена');
+      drawPinHitDebug(e.clientX,e.clientY);
     }
   },true);
 
