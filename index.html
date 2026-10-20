@@ -137,6 +137,20 @@ function installPinTouchHitTest(){
     return hit;
   };
   let start=null,lastOpened=0;
+  pinTouchDebug('готова — коснитесь синей метки');
+  document.addEventListener('pointerdown',e=>{
+    if(addingPoint||e.button>0)return;
+    const hit=findPin(e.clientX,e.clientY);
+    if(hit){
+      lastOpened=Date.now();
+      pinTouchDebug('касание метки: '+hit.name);
+      e.preventDefault();e.stopImmediatePropagation();
+      showLocation(hit.id);
+    }else if($('map').contains(e.target)){
+      pinTouchDebug('касание карты, метка не найдена');
+    }
+  },true);
+
   document.addEventListener('touchstart',e=>{
     if(addingPoint||e.touches.length!==1){start=null;return}
     const t=e.touches[0];start={x:t.clientX,y:t.clientY,time:Date.now()};
