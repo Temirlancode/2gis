@@ -134,7 +134,7 @@ function drawPinHitDebug(x,y){
     outline.style.cssText='position:fixed;z-index:99997;pointer-events:none;border:2px dashed #e11d48;background:#e11d481a;left:'+(r.left-42)+'px;top:'+(r.top-115)+'px;width:'+(r.width+84)+'px;height:'+(r.height+137)+'px';
     document.body.appendChild(outline);count++;
   }
-  pinTouchDebug('касание ('+Math.round(x)+','+Math.round(y)+'); рамок меток: '+count);
+  pinTouchDebug('касание ('+Math.round(x)+','+Math.round(y)+'); рамок: '+count+'; магазинов: '+data.locations.length+'; MapGL меток: '+markers.length+'; DOM меток: '+document.querySelectorAll('.marker').length);
 }
 function installPinTouchHitTest(){
   // iOS/MapGL can deliver pointerup without the matching pointerdown.
