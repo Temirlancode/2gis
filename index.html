@@ -129,8 +129,10 @@ function installPinTouchHitTest(){
     for(const marker of markers){
       const el=marker.__salesElement;if(!el)continue;
       const r=el.getBoundingClientRect();if(!r.width||!r.height)continue;
-      const dx=Math.max(r.left-18-x,0,x-(r.right+18));
-      const dy=Math.max(r.top-22-y,0,y-(r.bottom+16));
+      // The 📍 emoji is visually drawn far ABOVE its button box on iOS.
+      // Cover the whole visible head, not only the geographic anchor/tip.
+      const dx=Math.max(r.left-42-x,0,x-(r.right+42));
+      const dy=Math.max(r.top-115-y,0,y-(r.bottom+22));
       const distance=Math.hypot(dx,dy);
       if(distance<best&&distance<=8){best=distance;hit=marker.__salesLocation}
     }
