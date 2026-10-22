@@ -26,13 +26,12 @@ export default async function handler(req,res){
   if(!userResponse.ok)return res.status(401).json({error:'Unauthorized'});
   const user=await userResponse.json();
   const profiles=await read(url+'/rest/v1/user_profiles?user_id=eq.'+user.id+'&select=role',uh);
-  const isAdmin=profiles[0]?.role==='admin';
-  if(!['admin','seller'].includes(profiles[0]?.role))return res.status(403).json({error:'Seller or admin required'});
+  if(profiles[0]?.role!=='seller')return res.status(403).json({error:'Only sellers may post vehicle transfers'});
   const rows=await read(url+'/rest/v1/sales_map_moysklad_operations?id=eq.'+id+'&select=*',sh);
   const op=rows[0];
   if(!op||op.status!=='pending'||!P[op.product]||!V[op.vehicle_id]||!Number.isInteger(op.qty)||op.qty<1||!['load','return'].includes(op.direction))return res.status(409).json({error:'Invalid pending operation'});
   if(!liveEnabled&&(op.id!==approvedTestId||op.vehicle_id!=='vehicle-1'||op.product!=='KU-001'||op.qty!==1||op.direction!=='load'))return res.status(409).json({error:'Not the approved one-unit test'});
-  if(!isAdmin&&op.seller_id!==user.id)return res.status(403).json({error:'Operation belongs to another seller'});
+  if(op.seller_id!==user.id)return res.status(403).json({error:'Operation belongs to another seller'});
   const shifts=await read(url+'/rest/v1/sales_map_shifts?id=eq.'+encodeURIComponent(op.shift_id)+'&select=id,seller_id,vehicle_id,ended_at',sh);
   const shift=shifts[0];
   if(!shift||shift.ended_at!==null||shift.seller_id!==op.seller_id||shift.vehicle_id!==op.vehicle_id)return res.status(409).json({error:'Operation shift is not active for vehicle'});
