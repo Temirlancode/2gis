@@ -142,7 +142,7 @@ async function previewTestTransfer(){
  const {data:{session}}=await window.salesMapSupabase.auth.getSession();
  if(!session?.access_token)throw Error('Войдите заново');
  const r=await fetch('/api/moysklad/transfer-preview?id=dbd87e8e-8196-495c-9447-e5e7d761daae',{headers:{Authorization:'Bearer '+session.access_token}});
- const x=await r.json();if(!r.ok)throw Error(x.error||'Ошибка');
+ const x=await r.json();if(!r.ok)throw Error((x.error||'Ошибка')+(typeof x.authStatus==='number'?' (HTTP '+x.authStatus+')':''));
  openPanel('<h2>Проверка без записи</h2><p>'+esc(x.product)+' · '+esc(x.qty)+' шт.</p><p>'+esc(x.from)+' → '+esc(x.to)+'</p><p>Перемещение не выполнено.</p>');
  }catch(e){openPanel('<h2>Проверка заявки</h2><p class="danger">'+esc(e.message||e)+'</p>')}
 }
