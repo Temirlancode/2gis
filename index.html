@@ -241,7 +241,7 @@ async function saveMoveStock(f,direction){
 }
 let transferInFlight=false;
 async function postQueuedTransfer(id){
- if(transferInFlight)return alert('Операция уже отправлена. Не повторяйте.');
+ if(transferInFlight)return alert('Дождитесь завершения текущего запроса.');
  if(!confirm('РЕАЛЬНО провести заявку в МойСклад? Проверьте товар и количество. Повторно отправлять нельзя.'))return;
  transferInFlight=true;
  openPanel('<h2>Проведение перемещения</h2><p>Отправляем один запрос. Не повторяйте операцию при ошибке.</p>');
@@ -253,8 +253,8 @@ async function postQueuedTransfer(id){
   if(!r.ok)throw Error((result.error||'Неизвестный результат')+' (HTTP '+r.status+')');
   openPanel('<h2>Перемещение подтверждено</h2><p>Документ МойСклад: '+esc(result.documentId||'не указан')+'</p><button onclick="showShift()">Обновить остатки</button>');
  }catch(e){
-  openPanel('<h2>Проверьте результат</h2><p class="danger">'+esc(e.message||e)+'</p><p>Не повторяйте запрос. Сначала проверьте документ МойСклад и статус заявки.</p><button onclick="showShift()">Посмотреть заявки</button>');
- }
+  openPanel('<h2>Проверьте результат</h2><p class="danger">'+esc(e.message||e)+'</p><p>Если результат неизвестен, сначала проверьте статус заявки и документ МойСклад. Не отправляйте повторно без сверки.</p><button onclick="showShift()">Посмотреть заявки</button>');
+ }finally{transferInFlight=false}
 }
 async function finishShift(){
  if(!confirm('Завершить смену? Возврат товара необязателен, остатки останутся в машине.'))return;
