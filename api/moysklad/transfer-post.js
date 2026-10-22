@@ -1,4 +1,4 @@
-// Admin-only transfer worker. Disabled by default. Never retry uncertain outcomes.
+// Authenticated seller/admin transfer worker. Disabled by default. Never retry uncertain outcomes.
 const B='https://api.moysklad.ru/api/remap/1.2';
 const P={'MA-001':'74dfab0e-c48d-11f1-0a80-029d002504df','PR-001':'863fb57e-c48d-11f1-0a80-0bb00026219b','KU-001':'984fc86e-c48d-11f1-0a80-0e780024b1ac','EL-001':'e52604ea-cbe3-11f1-0a80-02e500009275'};
 const V={'vehicle-1':'Машина №1','vehicle-2':'Машина №2','vehicle-3':'Машина №3'};
@@ -11,7 +11,8 @@ export default async function handler(req,res){
  if(process.env.MOYSKLAD_TRANSFER_WRITE_ENABLED!=='true')return res.status(423).json({error:'Posting disabled'});
  // Temporary single-operation allowlist: write flag alone is not enough.
  const approvedTestId='dbd87e8e-8196-495c-9447-e5e7d761daae';
- if(process.env.MOYSKLAD_TRANSFER_TEST_OPERATION_ID!==approvedTestId)return res.status(423).json({error:'Single-operation test not armed'});
+ const liveEnabled=process.env.MOYSKLAD_TRANSFER_LIVE_ENABLED==='true';
+ if(!liveEnabled&&process.env.MOYSKLAD_TRANSFER_TEST_OPERATION_ID!==approvedTestId)return res.status(423).json({error:'Single-operation test not armed'});
  const id=String(req.body?.id||''),jwt=String(req.headers.authorization||'');
  if(!U.test(id)||!jwt.startsWith('Bearer '))return res.status(400).json({error:'Invalid request'});
  const url=process.env.SUPABASE_URL,anon=process.env.SUPABASE_ANON_KEY,service=process.env.SUPABASE_SERVICE_ROLE_KEY,token=process.env.MOYSKLAD_TOKEN,source=process.env.MOYSKLAD_WAREHOUSE_ID;
@@ -25,11 +26,16 @@ export default async function handler(req,res){
   if(!userResponse.ok)return res.status(401).json({error:'Unauthorized'});
   const user=await userResponse.json();
   const profiles=await read(url+'/rest/v1/user_profiles?user_id=eq.'+user.id+'&select=role',uh);
-  if(profiles[0]?.role!=='admin')return res.status(403).json({error:'Admin only'});
+  const isAdmin=profiles[0]?.role==='admin';
+  if(!['admin','seller'].includes(profiles[0]?.role))return res.status(403).json({error:'Seller or admin required'});
   const rows=await read(url+'/rest/v1/sales_map_moysklad_operations?id=eq.'+id+'&select=*',sh);
   const op=rows[0];
   if(!op||op.status!=='pending'||!P[op.product]||!V[op.vehicle_id]||!Number.isInteger(op.qty)||op.qty<1||!['load','return'].includes(op.direction))return res.status(409).json({error:'Invalid pending operation'});
-  if(op.id!==approvedTestId||op.vehicle_id!=='vehicle-1'||op.product!=='KU-001'||op.qty!==1||op.direction!=='load')return res.status(409).json({error:'Not the approved one-unit test'});
+  if(!liveEnabled&&(op.id!==approvedTestId||op.vehicle_id!=='vehicle-1'||op.product!=='KU-001'||op.qty!==1||op.direction!=='load'))return res.status(409).json({error:'Not the approved one-unit test'});
+  if(!isAdmin&&op.seller_id!==user.id)return res.status(403).json({error:'Operation belongs to another seller'});
+  const shifts=await read(url+'/rest/v1/sales_map_shifts?id=eq.'+encodeURIComponent(op.shift_id)+'&select=id,seller_id,vehicle_id,ended_at',sh);
+  const shift=shifts[0];
+  if(!shift||shift.ended_at!==null||shift.seller_id!==op.seller_id||shift.vehicle_id!==op.vehicle_id)return res.status(409).json({error:'Operation shift is not active for vehicle'});
   const stores=(await read(B+'/entity/store?limit=1000',mh)).rows||[];
   const a=stores.filter(x=>x.id===source&&x.name==='Береке базар');
   const b=stores.filter(x=>x.name===V[op.vehicle_id]);
