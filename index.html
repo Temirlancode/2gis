@@ -146,12 +146,28 @@ async function previewTestTransfer(){
  openPanel('<h2>Проверка без записи</h2><p>'+esc(x.product)+' · '+esc(x.qty)+' шт.</p><p>'+esc(x.from)+' → '+esc(x.to)+'</p><p>Перемещение не выполнено.</p>');
  }catch(e){openPanel('<h2>Проверка заявки</h2><p class="danger">'+esc(e.message||e)+'</p>')}
 }
+let testTransferSubmissionStarted=false;
+async function runApprovedTestTransfer(){
+ if(window.salesMapAuth?.role!=='admin')return alert('Только администратор');
+ if(testTransferSubmissionStarted)return alert('Запрос уже отправлялся в этой вкладке. Проверьте статус и документ, не повторяйте.');
+ if(!confirm('РЕАЛЬНОЕ перемещение: 1 шт. Кузбасслака из Береке базар в Машину №1. Продолжить?'))return;
+ testTransferSubmissionStarted=true;
+ openPanel('<h2>Проведение теста</h2><p>Отправляем единственный запрос. Не обновляйте страницу и не повторяйте операцию.</p>');
+ try{
+  const {data:{session}}=await window.salesMapSupabase.auth.getSession();
+  if(!session?.access_token)throw Error('Нет действующей сессии. Проверьте заявку; повторную отправку не делайте.');
+  const response=await fetch('/api/moysklad/transfer-post',{method:'POST',headers:{Authorization:'Bearer '+session.access_token,'Content-Type':'application/json'},body:JSON.stringify({id:'dbd87e8e-8196-495c-9447-e5e7d761daae'})});
+  const result=await response.json();
+  if(!response.ok)throw Error((result.error||'Неизвестный результат')+' (HTTP '+response.status+'). Проверьте статус и документ; не нажимайте повторно.');
+  openPanel('<h2>Результат перемещения</h2><p>Сервер подтвердил операцию.</p><p>ID документа: '+esc(result.documentId||'не указан')+'</p><p>Проверьте остатки в МойСклад и приложении.</p>');
+ }catch(e){openPanel('<h2>Требуется проверка</h2><p class="danger">'+esc(e.message||e)+'</p><p>Не повторяйте запрос до ручной сверки.</p>')}
+}
 async function showShift(){
  if(!window.salesMapAuth?.userId)return alert('Сначала войдите');
  openPanel('<h2>Моя линия</h2>Загрузка…');
  try{
  await refreshShift();
- if(!activeShift){openPanel('<h2>🚚 Моя линия</h2><div class="notice">⚪ Не на линии</div><p>Роль входа: '+esc(window.salesMapAuth?.role||'не определена')+'</p><button onclick="startShift()">На линию</button><button class="secondary" onclick="previewTestTransfer()">Проверить тестовую заявку (без записи)</button>');return}
+ if(!activeShift){openPanel('<h2>🚚 Моя линия</h2><div class="notice">⚪ Не на линии</div><p>Роль входа: '+esc(window.salesMapAuth?.role||'не определена')+'</p><button onclick="startShift()">На линию</button><button class="secondary" onclick="previewTestTransfer()">Проверить тестовую заявку (без записи)</button><button class="secondary" onclick="runApprovedTestTransfer()">Провести 1 шт. Кузбасслака (реальная запись)</button>');return}
  const sales=lastShift?data.sales.filter(x=>x.createdBy===window.salesMapAuth.userId&&x.createdAt&&new Date(x.createdAt)>=new Date(lastShift.started_at)&&new Date(x.createdAt)<=new Date(lastShift.ended_at||Date.now())):[];
  const sold=sales.filter(x=>x.qty>0),gross=sold.reduce((a,x)=>a+x.qty*x.price,0),paid=sales.reduce((a,x)=>a+x.paid,0);
  const minutes=lastShift?Math.max(0,Math.floor((new Date(lastShift.ended_at||Date.now())-new Date(lastShift.started_at))/60000)):0;
@@ -164,7 +180,7 @@ async function showShift(){
   queued=(q.data||[]).map(x=>'<div class="item">'+(x.direction==='load'?'Заявка загрузки':'Заявка возврата')+' · '+esc(goods.find(g=>g.id===x.product)?.name||x.product)+' · '+x.qty+' · '+esc(x.status==='pending'?'Ожидает обработки':x.status==='succeeded'?'Подтверждено':x.status==='reconciliation_needed'?'Требует сверки':x.status)+'</div>').join('');
  }
  const moves=shiftMovements.map(m=>'<div class="item">'+(m.direction==='load'?'Загрузка':'Возврат')+' · '+esc(goods.find(g=>g.id===m.product)?.name||m.product)+' · '+m.qty+' · '+esc(new Date(m.created_at).toLocaleString('ru-RU'))+'</div>').join('');
- openPanel('<h2>🚚 Моя линия</h2>'+(activeShift?.vehicle_id?'<div class="notice">Машина: '+esc({'vehicle-1':'Машина №1','vehicle-2':'Машина №2','vehicle-3':'Машина №3'}[activeShift.vehicle_id]||activeShift.vehicle_id)+'</div><div class="notice">⚠️ Нулевые остатки — начальные учётные значения, пока не проведена сверка с МойСклад. Продажи и перемещения ещё не подключены.</div>':'')+'<div class="notice">'+(activeShift?'🟢 На линии':'⚪ Не на линии')+'</div>'+'<div class="notice">Роль входа: '+esc(window.salesMapAuth?.role||'не определена')+'</div><button class="secondary" onclick="previewTestTransfer()">Проверить тестовую заявку (без записи)</button>'+'<h3>Товар в машине</h3>'+rows+'<div class="notice">⚠️ Остатки ведутся в приложении. Перемещения и продажи пока НЕ отправляются в МойСклад.</div>'+stats+(activeShift?'<div class="actions"><button onclick="showMoveStock(\'load\')">＋ Заявка на загрузку</button><button class="secondary" onclick="showMoveStock(\'return\')">↩ Заявка на возврат</button><button onclick="finishShift()">Выйти с линии</button></div>':'<button onclick="startShift()">На линию</button>')+(queued?'<h3>Заявки на перемещение</h3>'+queued:'')+(moves?'<h3>Загрузки и возвраты</h3>'+moves:''));
+ openPanel('<h2>🚚 Моя линия</h2>'+(activeShift?.vehicle_id?'<div class="notice">Машина: '+esc({'vehicle-1':'Машина №1','vehicle-2':'Машина №2','vehicle-3':'Машина №3'}[activeShift.vehicle_id]||activeShift.vehicle_id)+'</div><div class="notice">⚠️ Нулевые остатки — начальные учётные значения, пока не проведена сверка с МойСклад. Продажи и перемещения ещё не подключены.</div>':'')+'<div class="notice">'+(activeShift?'🟢 На линии':'⚪ Не на линии')+'</div>'+'<div class="notice">Роль входа: '+esc(window.salesMapAuth?.role||'не определена')+'</div><button class="secondary" onclick="previewTestTransfer()">Проверить тестовую заявку (без записи)</button><button class="secondary" onclick="runApprovedTestTransfer()">Провести 1 шт. Кузбасслака (реальная запись)</button>'+'<h3>Товар в машине</h3>'+rows+'<div class="notice">⚠️ Остатки ведутся в приложении. Перемещения и продажи пока НЕ отправляются в МойСклад.</div>'+stats+(activeShift?'<div class="actions"><button onclick="showMoveStock(\'load\')">＋ Заявка на загрузку</button><button class="secondary" onclick="showMoveStock(\'return\')">↩ Заявка на возврат</button><button onclick="finishShift()">Выйти с линии</button></div>':'<button onclick="startShift()">На линию</button>')+(queued?'<h3>Заявки на перемещение</h3>'+queued:'')+(moves?'<h3>Загрузки и возвраты</h3>'+moves:''));
  }catch(e){openPanel('<h2>Моя линия</h2><p class="danger">'+esc(e.message||e)+'</p>')}
 }
 async function startShift(){
