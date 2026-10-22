@@ -20,7 +20,7 @@ export default async function handler(req,res){
  const jwt=auth.slice(7);
  try{
   const supaHeaders={apikey:anon,Authorization:'Bearer '+jwt};
-  const who=await fetch(url+'/auth/v1/user',{headers:supaHeaders,signal:AbortSignal.timeout(10000)});
+  const who=await fetch(url.replace(/\/+$/,'')+'/auth/v1/user',{headers:supaHeaders,signal:AbortSignal.timeout(10000)});
   if(!who.ok)return res.status(who.status===401?401:502).json({error:who.status===401?'Supabase rejected session token':'Supabase auth verification failed',authStatus:who.status});
   const user=await who.json();
   if(!UUID.test(user.id||''))return res.status(401).json({error:'Invalid user'});
