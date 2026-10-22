@@ -47,10 +47,11 @@ export default async function handler(req,res){
    const stock=await read(url+'/rest/v1/sales_map_car_stock?vehicle_id=eq.'+op.vehicle_id+'&product=eq.'+op.product+'&select=qty',sh);
    if(!stock.length||stock[0].qty<op.qty)return res.status(409).json({error:'Insufficient vehicle stock'});
   }
-  // Read the exact source warehouse's live stock before claiming or posting.
+  // Read the exact origin warehouse's live stock for both loading and returning before claiming or posting.
   // Fail closed on incomplete stock reports; do not use global stock totals.
-  if(op.direction==='load'){
-   const stockFilter='store='+B+'/entity/store/'+source;
+  {
+   const originStore=op.direction==='load'?source:b[0].id;
+   const stockFilter='store='+B+'/entity/store/'+originStore;
    let offset=0,available=null,complete=false;
    for(let pageNum=0;pageNum<10;pageNum++){
     const stockUrl=new URL(B+'/report/stock/all');
@@ -58,7 +59,7 @@ export default async function handler(req,res){
     stockUrl.searchParams.set('limit','1000');
     stockUrl.searchParams.set('offset',String(offset));
     const page=await read(stockUrl.toString(),mh);
-    if(!Array.isArray(page.rows))return res.status(502).json({error:'Warehouse stock report unavailable'});
+    if(!Array.isArray(page.rows)||!Number.isInteger(page.meta?.size))return res.status(502).json({error:'Warehouse stock report unavailable'});
     for(const row of page.rows){
      const href=row.meta?.href||row.assortment?.meta?.href||'';
      const itemId=href.match(/\/([0-9a-f-]{36})(?:\?|$)/i)?.[1];
@@ -69,10 +70,11 @@ export default async function handler(req,res){
      }
     }
     offset+=page.rows.length;
-    if(page.rows.length===0||offset>=(page.meta?.size??offset)){complete=true;break}
+    if(offset>=page.meta.size){complete=true;break}
+    if(page.rows.length===0)return res.status(502).json({error:'Warehouse stock report incomplete'});
    }
    if(!complete)return res.status(502).json({error:'Warehouse stock report incomplete'});
-   if((available??0)<op.qty)return res.status(409).json({error:'Insufficient source warehouse stock'});
+   if((available??0)<op.qty)return res.status(409).json({error:'Insufficient origin warehouse stock'});
   }
   const externalCode='sales-map-transfer-'+op.id;
   const q=new URL(B+'/entity/move');q.searchParams.set('filter','externalCode='+externalCode);
