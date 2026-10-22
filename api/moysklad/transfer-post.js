@@ -21,7 +21,7 @@ export default async function handler(req,res){
  const rpc=async(name,body)=>{const r=await fetch(url+'/rest/v1/rpc/'+name,{method:'POST',headers:sh,body:JSON.stringify(body),signal:AbortSignal.timeout(12000)});if(!r.ok)throw Error('RPC failed '+name);return r.json()};
  let claimed=false;
  try{
-  const userResponse=await fetch(url+'/auth/v1/user',{headers:uh,signal:AbortSignal.timeout(10000)});
+  const userResponse=await fetch(url.replace(/\/+$/,'')+'/auth/v1/user',{headers:uh,signal:AbortSignal.timeout(10000)});
   if(!userResponse.ok)return res.status(401).json({error:'Unauthorized'});
   const user=await userResponse.json();
   const profiles=await read(url+'/rest/v1/user_profiles?user_id=eq.'+user.id+'&select=role',uh);
