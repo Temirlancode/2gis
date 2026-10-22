@@ -41,6 +41,33 @@ export default async function handler(req,res){
    const stock=await read(url+'/rest/v1/sales_map_car_stock?vehicle_id=eq.'+op.vehicle_id+'&product=eq.'+op.product+'&select=qty',sh);
    if(!stock.length||stock[0].qty<op.qty)return res.status(409).json({error:'Insufficient vehicle stock'});
   }
+  // Read the exact source warehouse's live stock before claiming or posting.
+  // Fail closed on incomplete stock reports; do not use global stock totals.
+  if(op.direction==='load'){
+   const stockFilter='store='+B+'/entity/store/'+source;
+   let offset=0,available=null,complete=false;
+   for(let pageNum=0;pageNum<10;pageNum++){
+    const stockUrl=new URL(B+'/report/stock/all');
+    stockUrl.searchParams.set('filter',stockFilter);
+    stockUrl.searchParams.set('limit','1000');
+    stockUrl.searchParams.set('offset',String(offset));
+    const page=await read(stockUrl.toString(),mh);
+    if(!Array.isArray(page.rows))return res.status(502).json({error:'Warehouse stock report unavailable'});
+    for(const row of page.rows){
+     const href=row.meta?.href||row.assortment?.meta?.href||'';
+     const itemId=href.match(/\/([0-9a-f-]{36})(?:\?|$)/i)?.[1];
+     if(itemId===P[op.product]){
+      const value=Number(row.stock);
+      if(!Number.isFinite(value))return res.status(502).json({error:'Invalid source stock'});
+      available=(available??0)+value;
+     }
+    }
+    offset+=page.rows.length;
+    if(page.rows.length===0||offset>=(page.meta?.size??offset)){complete=true;break}
+   }
+   if(!complete)return res.status(502).json({error:'Warehouse stock report incomplete'});
+   if((available??0)<op.qty)return res.status(409).json({error:'Insufficient source warehouse stock'});
+  }
   const externalCode='sales-map-transfer-'+op.id;
   const q=new URL(B+'/entity/move');q.searchParams.set('filter','externalCode='+externalCode);
   const found=(await read(q.toString(),mh)).rows||[];
