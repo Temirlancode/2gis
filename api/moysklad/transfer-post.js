@@ -82,8 +82,10 @@ export default async function handler(req,res){
   const verified=await read(B+'/entity/move/'+doc.id+'?expand=positions',mh);
   const getId=x=>x?.meta?.href?.match(/\/([0-9a-f-]{36})(?:\?|$)/i)?.[1];
   const positions=verified.positions?.rows||[];
-  if(verified.externalCode!==externalCode||verified.applicable!==true||getId(verified.sourceStore)!==from||getId(verified.targetStore)!==to||positions.length!==1||getId(positions[0].assortment)!==P[op.product]||Number(positions[0].quantity)!==op.qty)
+  if(verified.id!==doc.id||verified.archived===true||verified.deleted===true||verified.externalCode!==externalCode||verified.applicable!==true||getId(verified.sourceStore)!==from||getId(verified.targetStore)!==to||positions.length!==1||getId(positions[0].assortment)!==P[op.product]||Number(positions[0].quantity)!==op.qty)
    return res.status(502).json({error:'Document verification failed; reconcile manually',operationId:id});
+  // Check that the document is posted, not merely created. Only then update app stock.
+  if(verified.applicable!==true)return res.status(502).json({error:'Document is not posted; reconcile manually',operationId:id});
   await rpc('sales_map_confirm_transfer',{p_operation_id:id,p_document_id:doc.id});
   return res.status(200).json({ok:true,operationId:id,documentId:doc.id});
  }catch{return res.status(502).json({error:claimed?'Outcome uncertain; reconcile manually':'Preflight failed; nothing posted by this request',operationId:id})}
