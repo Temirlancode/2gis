@@ -211,6 +211,7 @@ function showMoveStock(direction){
 }
 async function saveMoveStock(f,direction){
  const qty=Number(f.qty.value);if(!Number.isInteger(qty)||qty<1)return alert('Введите количество');
+ if(direction==='return'&&qty>Number(vehicleStock[f.product.value]||0))return alert('Недостаточно товара в машине для возврата');
  const b=f.querySelector('button');b.disabled=true;
  try{if(activeShift?.vehicle_id){const key=f.dataset.operationKey||(f.dataset.operationKey=crypto.randomUUID());await shiftRpc('sales_map_queue_transfer',{p_idempotency_key:key,p_product:f.product.value,p_qty:qty,p_direction:direction});alert('Заявка создана. Для перемещения нажмите «Провести в МойСклад» в списке заявок.');}else{await shiftRpc('sales_map_move_stock',{p_product:f.product.value,p_qty:qty,p_direction:direction});}await showShift()}catch(e){alert(e.message)}finally{b.disabled=false}
 }
