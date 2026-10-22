@@ -13,6 +13,14 @@ begin
  if v_op.status <> 'pending' then raise exception 'Operation not pending'; end if;
  -- Serialize all transfers involving this car, even across seller shifts.
  perform pg_advisory_xact_lock(hashtext('sales-map-car:'||v_op.vehicle_id));
+ -- Do not allow concurrent in-flight moves for the same vehicle.
+ -- The advisory transaction lock alone ends when this RPC returns.
+ if exists (
+  select 1 from public.sales_map_moysklad_operations other
+  where other.vehicle_id=v_op.vehicle_id
+    and other.id<>v_op.id
+    and other.status in ('processing','reconciliation_needed')
+ ) then raise exception 'Another vehicle transfer requires completion or reconciliation'; end if;
  -- Prevent starting work for a shift that has already ended.
  if not exists(select 1 from public.sales_map_shifts s
   where s.id=v_op.shift_id and s.seller_id=v_op.seller_id
