@@ -5,7 +5,7 @@ export default async function handler(req,res){
  const token=process.env.MOYSKLAD_TOKEN;
  if(!token)return res.status(503).json({error:'MoySklad token not configured'});
  try{
-  const response=await fetch(BASE+'/entity/organization?limit=100',{headers:{Authorization:'Bearer '+token.trim(),Accept:'application/json'},signal:AbortSignal.timeout(12000)});
+  const response=await fetch(BASE+'/entity/organization?limit=100',{headers:{Authorization:'Bearer '+token.trim(),Accept:'application/json;charset=utf-8'},signal:AbortSignal.timeout(12000)});
   if(!response.ok){const raw=await response.text();let detail='';try{const data=JSON.parse(raw);detail=(data.errors||[]).map(x=>({code:x.code,error:x.error})).slice(0,3)}catch{}return res.status(502).json({ready:false,error:'MoySklad API returned error',upstreamStatus:response.status,details:detail,hint:response.status===400?'Check API request and error code':response.status===401?'Check MOYSKLAD_TOKEN':response.status===403?'Check token permissions':response.status===429?'Rate limited; retry later':'Check MoySklad API availability'});}
   const page=await response.json();
   const organizations=(page.rows||[]).filter(o=>!o.archived);
