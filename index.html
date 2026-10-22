@@ -151,7 +151,7 @@ async function showShift(){
  openPanel('<h2>Моя линия</h2>Загрузка…');
  try{
  await refreshShift();
- if(!activeShift){openPanel('<h2>🚚 Моя линия</h2><div class="notice">⚪ Не на линии</div><p>Выберите машину, чтобы начать смену.</p><button onclick="startShift()">На линию</button>');return}
+ if(!activeShift){openPanel('<h2>🚚 Моя линия</h2><div class="notice">⚪ Не на линии</div><p>Выберите машину, чтобы начать смену.</p><button onclick="startShift()">На линию</button>'+(window.salesMapAuth?.role==='admin'?'<button class="secondary" onclick="previewTestTransfer()">Проверить тестовую заявку (без записи)</button>':''));return}
  const sales=lastShift?data.sales.filter(x=>x.createdBy===window.salesMapAuth.userId&&x.createdAt&&new Date(x.createdAt)>=new Date(lastShift.started_at)&&new Date(x.createdAt)<=new Date(lastShift.ended_at||Date.now())):[];
  const sold=sales.filter(x=>x.qty>0),gross=sold.reduce((a,x)=>a+x.qty*x.price,0),paid=sales.reduce((a,x)=>a+x.paid,0);
  const minutes=lastShift?Math.max(0,Math.floor((new Date(lastShift.ended_at||Date.now())-new Date(lastShift.started_at))/60000)):0;
