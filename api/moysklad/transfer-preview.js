@@ -11,13 +11,17 @@ export default async function handler(req,res){
  const opId=String(req.query?.id||'');
  if(!UUID.test(opId))return res.status(400).json({error:'Invalid operation ID'});
  const url=process.env.SUPABASE_URL,anon=process.env.SUPABASE_ANON_KEY;
+ // The browser authenticates against this project; never accept a JWT from a different project.
+ const expectedProject='miltxoswnnkvuxsbmhzn';
+ try{if(new URL(url).hostname!==expectedProject+'.supabase.co')return res.status(503).json({error:'Supabase project mismatch: server and app use different projects'});}catch{return res.status(503).json({error:'Invalid server Supabase URL'});}
+
  const token=process.env.MOYSKLAD_TOKEN?.trim(),sourceId=process.env.MOYSKLAD_WAREHOUSE_ID;
  if(!url||!anon||!token||!UUID.test(sourceId||''))return res.status(503).json({error:'Server configuration incomplete'});
  const jwt=auth.slice(7);
  try{
   const supaHeaders={apikey:anon,Authorization:'Bearer '+jwt};
   const who=await fetch(url+'/auth/v1/user',{headers:supaHeaders,signal:AbortSignal.timeout(10000)});
-  if(!who.ok)return res.status(401).json({error:'Invalid session'});
+  if(!who.ok)return res.status(who.status===401?401:502).json({error:who.status===401?'Supabase rejected session token':'Supabase auth verification failed',authStatus:who.status});
   const user=await who.json();
   if(!UUID.test(user.id||''))return res.status(401).json({error:'Invalid user'});
   const opResp=await fetch(url+'/rest/v1/sales_map_moysklad_operations?id=eq.'+opId+'&select=id,seller_id,shift_id,vehicle_id,product,qty,direction,status',{headers:supaHeaders,signal:AbortSignal.timeout(10000)});
