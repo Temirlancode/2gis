@@ -1,6 +1,6 @@
 // Authenticated read-only validation of a queued transfer. Never posts stock documents.
 const BASE='https://api.moysklad.ru/api/remap/1.2';
-const PRODUCT_IDS={'EL-001':'74dfab0e-c48d-11f1-0a80-029d002504df','MA-001':'863fb57e-c48d-11f1-0a80-0bb00026219b','PR-001':'984fc86e-c48d-11f1-0a80-0e780024b1ac','KU-001':'e52604ea-cbe3-11f1-0a80-02e500009275'};
+const PRODUCT_IDS={'MA-001':'74dfab0e-c48d-11f1-0a80-029d002504df','PR-001':'863fb57e-c48d-11f1-0a80-0bb00026219b','KU-001':'984fc86e-c48d-11f1-0a80-0e780024b1ac','EL-001':'e52604ea-cbe3-11f1-0a80-02e500009275'};
 const VEHICLES={'vehicle-1':'Машина №1','vehicle-2':'Машина №2','vehicle-3':'Машина №3'};
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export default async function handler(req,res){
