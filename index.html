@@ -175,9 +175,9 @@ async function showShift(){
  const rows=goods.map(g=>'<div class="item">'+esc(g.name)+' — <b>'+esc(vehicleStock[g.id]||0)+' '+esc(g.unit)+'</b></div>').join('');
  let queued='';
  if(activeShift?.vehicle_id){
-  const q=await window.salesMapSupabase.from('sales_map_moysklad_operations').select('product,qty,direction,status,created_at').eq('shift_id',activeShift.id).order('created_at',{ascending:false}).limit(30);
+  const q=await window.salesMapSupabase.from('sales_map_moysklad_operations').select('id,product,qty,direction,status,created_at').eq('shift_id',activeShift.id).order('created_at',{ascending:false}).limit(30);
   if(q.error)throw Error('Выполните SQL из supabase/moysklad_operations.sql');
-  queued=(q.data||[]).map(x=>'<div class="item">'+(x.direction==='load'?'Заявка загрузки':'Заявка возврата')+' · '+esc(goods.find(g=>g.id===x.product)?.name||x.product)+' · '+x.qty+' · '+esc(x.status==='pending'?'Ожидает обработки':x.status==='succeeded'?'Подтверждено':x.status==='reconciliation_needed'?'Требует сверки':x.status)+'</div>').join('');
+  queued=(q.data||[]).map(x=>'<div class="item">'+(x.direction==='load'?'Заявка загрузки':'Заявка возврата')+' · '+esc(goods.find(g=>g.id===x.product)?.name||x.product)+' · '+x.qty+' · '+esc(x.status==='pending'?'Ожидает обработки':x.status==='succeeded'?'Подтверждено':x.status==='reconciliation_needed'?'Требует сверки':x.status)+'</div>'+(x.status==='pending'?'<button class="secondary" onclick="postQueuedTransfer(\''+esc(x.id)+'\')">Провести в МойСклад</button>':'')).join('');
  }
  const moves=shiftMovements.map(m=>'<div class="item">'+(m.direction==='load'?'Загрузка':'Возврат')+' · '+esc(goods.find(g=>g.id===m.product)?.name||m.product)+' · '+m.qty+' · '+esc(new Date(m.created_at).toLocaleString('ru-RU'))+'</div>').join('');
  openPanel('<h2>🚚 Моя линия</h2>'+(activeShift?.vehicle_id?'<div class="notice">Машина: '+esc({'vehicle-1':'Машина №1','vehicle-2':'Машина №2','vehicle-3':'Машина №3'}[activeShift.vehicle_id]||activeShift.vehicle_id)+'</div><div class="notice">⚠️ Нулевые остатки — начальные учётные значения, пока не проведена сверка с МойСклад. Продажи и перемещения ещё не подключены.</div>':'')+'<div class="notice">'+(activeShift?'🟢 На линии':'⚪ Не на линии')+'</div>'+'<div class="notice">Роль входа: '+esc(window.salesMapAuth?.role||'не определена')+'</div><button class="secondary" onclick="previewTestTransfer()">Проверить тестовую заявку (без записи)</button><button class="secondary" onclick="runApprovedTestTransfer()">Провести 1 шт. Кузбасслака (реальная запись)</button>'+'<h3>Товар в машине</h3>'+rows+'<div class="notice">⚠️ Остатки ведутся в приложении. Перемещения и продажи пока НЕ отправляются в МойСклад.</div>'+stats+(activeShift?'<div class="actions"><button onclick="showMoveStock(\'load\')">＋ Заявка на загрузку</button><button class="secondary" onclick="showMoveStock(\'return\')">↩ Заявка на возврат</button><button onclick="finishShift()">Выйти с линии</button></div>':'<button onclick="startShift()">На линию</button>')+(queued?'<h3>Заявки на перемещение</h3>'+queued:'')+(moves?'<h3>Загрузки и возвраты</h3>'+moves:''));
@@ -207,12 +207,29 @@ async function confirmVehicleShift(f){
 function showMoveStock(direction){
  if(!activeShift)return showShift();
  const options=goods.map(g=>'<option value="'+g.id+'">'+esc(g.name)+' (в машине: '+(vehicleStock[g.id]||0)+')</option>').join('');
- openPanel('<h2>'+(direction==='load'?'Заявка на загрузку':'Заявка на возврат')+'</h2><div class="notice">⚠️ Только заявка в очередь. Товар НЕ перемещается и остатки НЕ меняются до подтверждения МойСклад.</div><form onsubmit="event.preventDefault();saveMoveStock(event.target,\''+direction+'\')"><label class="field">Товар<select name="product">'+options+'</select></label><label class="field">Количество<input name="qty" type="number" min="1" step="1" required value="1"></label><button>Подтвердить</button><button type="button" class="secondary" onclick="showShift()">Назад</button></form>');
+ openPanel('<h2>'+(direction==='load'?'Заявка на загрузку':'Заявка на возврат')+'</h2><div class="notice">Сначала создаётся заявка. Затем её можно провести отдельной кнопкой, когда серверная запись разрешена.</div><form onsubmit="event.preventDefault();saveMoveStock(event.target,\''+direction+'\')"><label class="field">Товар<select name="product">'+options+'</select></label><label class="field">Количество<input name="qty" type="number" min="1" step="1" required value="1"></label><button>Подтвердить</button><button type="button" class="secondary" onclick="showShift()">Назад</button></form>');
 }
 async function saveMoveStock(f,direction){
  const qty=Number(f.qty.value);if(!Number.isInteger(qty)||qty<1)return alert('Введите количество');
  const b=f.querySelector('button');b.disabled=true;
- try{if(activeShift?.vehicle_id){const key=f.dataset.operationKey||(f.dataset.operationKey=crypto.randomUUID());await shiftRpc('sales_map_queue_transfer',{p_idempotency_key:key,p_product:f.product.value,p_qty:qty,p_direction:direction});alert('Заявка сохранена. Товар НЕ перемещён в МойСклад и остатки НЕ изменены.');}else{await shiftRpc('sales_map_move_stock',{p_product:f.product.value,p_qty:qty,p_direction:direction});}await showShift()}catch(e){alert(e.message)}finally{b.disabled=false}
+ try{if(activeShift?.vehicle_id){const key=f.dataset.operationKey||(f.dataset.operationKey=crypto.randomUUID());await shiftRpc('sales_map_queue_transfer',{p_idempotency_key:key,p_product:f.product.value,p_qty:qty,p_direction:direction});alert('Заявка создана. Для перемещения нажмите «Провести в МойСклад» в списке заявок.');}else{await shiftRpc('sales_map_move_stock',{p_product:f.product.value,p_qty:qty,p_direction:direction});}await showShift()}catch(e){alert(e.message)}finally{b.disabled=false}
+}
+let transferInFlight=false;
+async function postQueuedTransfer(id){
+ if(transferInFlight)return alert('Операция уже отправлена. Не повторяйте.');
+ if(!confirm('РЕАЛЬНО провести заявку в МойСклад? Проверьте товар и количество. Повторно отправлять нельзя.'))return;
+ transferInFlight=true;
+ openPanel('<h2>Проведение перемещения</h2><p>Отправляем один запрос. Не повторяйте операцию при ошибке.</p>');
+ try{
+  const {data:{session}}=await window.salesMapSupabase.auth.getSession();
+  if(!session?.access_token)throw Error('Войдите заново');
+  const r=await fetch('/api/moysklad/transfer-post',{method:'POST',headers:{Authorization:'Bearer '+session.access_token,'Content-Type':'application/json'},body:JSON.stringify({id})});
+  const result=await r.json();
+  if(!r.ok)throw Error((result.error||'Неизвестный результат')+' (HTTP '+r.status+')');
+  openPanel('<h2>Перемещение подтверждено</h2><p>Документ МойСклад: '+esc(result.documentId||'не указан')+'</p><button onclick="showShift()">Обновить остатки</button>');
+ }catch(e){
+  openPanel('<h2>Проверьте результат</h2><p class="danger">'+esc(e.message||e)+'</p><p>Не повторяйте запрос. Сначала проверьте документ МойСклад и статус заявки.</p><button onclick="showShift()">Посмотреть заявки</button>');
+ }
 }
 async function finishShift(){
  if(!confirm('Завершить смену? Возврат товара необязателен, остатки останутся в машине.'))return;
