@@ -147,8 +147,14 @@ async function showShift(){
  const minutes=lastShift?Math.max(0,Math.floor((new Date(lastShift.ended_at||Date.now())-new Date(lastShift.started_at))/60000)):0;
  const stats=lastShift?'<div class="notice"><strong>Итоги смены</strong><p>Время: '+Math.floor(minutes/60)+' ч '+minutes%60+' мин</p><p>Продано: '+sold.reduce((a,x)=>a+x.qty,0)+' шт. · Сумма: '+money(gross)+'</p><p>Получено денег (включая погашения долгов): '+money(paid)+'</p><p>Долг по продажам: '+money(sold.reduce((a,x)=>a+x.qty*x.price-x.paid,0))+'</p></div>':'';
  const rows=goods.map(g=>'<div class="item">'+esc(g.name)+' — <b>'+esc(vehicleStock[g.id]||0)+' '+esc(g.unit)+'</b></div>').join('');
+ let queued='';
+ if(activeShift?.vehicle_id){
+  const q=await window.salesMapSupabase.from('sales_map_moysklad_operations').select('product,qty,direction,status,created_at').eq('shift_id',activeShift.id).order('created_at',{ascending:false}).limit(30);
+  if(q.error)throw Error('Выполните SQL из supabase/moysklad_operations.sql');
+  queued=(q.data||[]).map(x=>'<div class="item">'+(x.direction==='load'?'Заявка загрузки':'Заявка возврата')+' · '+esc(goods.find(g=>g.id===x.product)?.name||x.product)+' · '+x.qty+' · '+esc(x.status==='pending'?'Ожидает обработки':x.status==='succeeded'?'Подтверждено':x.status==='reconciliation_needed'?'Требует сверки':x.status)+'</div>').join('');
+ }
  const moves=shiftMovements.map(m=>'<div class="item">'+(m.direction==='load'?'Загрузка':'Возврат')+' · '+esc(goods.find(g=>g.id===m.product)?.name||m.product)+' · '+m.qty+' · '+esc(new Date(m.created_at).toLocaleString('ru-RU'))+'</div>').join('');
- openPanel('<h2>🚚 Моя линия</h2>'+(activeShift?.vehicle_id?'<div class="notice">Машина: '+esc({'vehicle-1':'Машина №1','vehicle-2':'Машина №2','vehicle-3':'Машина №3'}[activeShift.vehicle_id]||activeShift.vehicle_id)+'</div><div class="notice">⚠️ Нулевые остатки — начальные учётные значения, пока не проведена сверка с МойСклад. Продажи и перемещения ещё не подключены.</div>':'')+'<div class="notice">'+(activeShift?'🟢 На линии':'⚪ Не на линии')+'</div><h3>Товар в машине</h3>'+rows+'<div class="notice">⚠️ Остатки ведутся в приложении. Перемещения и продажи пока НЕ отправляются в МойСклад.</div>'+stats+(activeShift?'<div class="actions"><button onclick="showMoveStock(\'load\')">＋ Загрузить</button><button class="secondary" onclick="showMoveStock(\'return\')">↩ Вернуть на склад</button><button onclick="finishShift()">Выйти с линии</button></div>':'<button onclick="startShift()">На линию</button>')+(moves?'<h3>Загрузки и возвраты</h3>'+moves:''));
+ openPanel('<h2>🚚 Моя линия</h2>'+(activeShift?.vehicle_id?'<div class="notice">Машина: '+esc({'vehicle-1':'Машина №1','vehicle-2':'Машина №2','vehicle-3':'Машина №3'}[activeShift.vehicle_id]||activeShift.vehicle_id)+'</div><div class="notice">⚠️ Нулевые остатки — начальные учётные значения, пока не проведена сверка с МойСклад. Продажи и перемещения ещё не подключены.</div>':'')+'<div class="notice">'+(activeShift?'🟢 На линии':'⚪ Не на линии')+'</div><h3>Товар в машине</h3>'+rows+'<div class="notice">⚠️ Остатки ведутся в приложении. Перемещения и продажи пока НЕ отправляются в МойСклад.</div>'+stats+(activeShift?'<div class="actions"><button onclick="showMoveStock(\'load\')">＋ Заявка на загрузку</button><button class="secondary" onclick="showMoveStock(\'return\')">↩ Заявка на возврат</button><button onclick="finishShift()">Выйти с линии</button></div>':'<button onclick="startShift()">На линию</button>')+(queued?'<h3>Заявки на перемещение</h3>'+queued:'')+(moves?'<h3>Загрузки и возвраты</h3>'+moves:''));
  }catch(e){openPanel('<h2>Моя линия</h2><p class="danger">'+esc(e.message||e)+'</p>')}
 }
 async function startShift(){
@@ -173,16 +179,14 @@ async function confirmVehicleShift(f){
  catch(e){alert(e.message||e)}finally{b.disabled=false}
 }
 function showMoveStock(direction){
- if(activeShift?.vehicle_id)return alert('Операции с остатками машины пока не подключены');
  if(!activeShift)return showShift();
  const options=goods.map(g=>'<option value="'+g.id+'">'+esc(g.name)+' (в машине: '+(vehicleStock[g.id]||0)+')</option>').join('');
- openPanel('<h2>'+(direction==='load'?'Загрузить товар':'Вернуть товар')+'</h2><div class="notice">⚠️ Запись только в приложении, не в МойСклад.</div><form onsubmit="event.preventDefault();saveMoveStock(event.target,\''+direction+'\')"><label class="field">Товар<select name="product">'+options+'</select></label><label class="field">Количество<input name="qty" type="number" min="1" step="1" required value="1"></label><button>Подтвердить</button><button type="button" class="secondary" onclick="showShift()">Назад</button></form>');
+ openPanel('<h2>'+(direction==='load'?'Заявка на загрузку':'Заявка на возврат')+'</h2><div class="notice">⚠️ Только заявка в очередь. Товар НЕ перемещается и остатки НЕ меняются до подтверждения МойСклад.</div><form onsubmit="event.preventDefault();saveMoveStock(event.target,\''+direction+'\')"><label class="field">Товар<select name="product">'+options+'</select></label><label class="field">Количество<input name="qty" type="number" min="1" step="1" required value="1"></label><button>Подтвердить</button><button type="button" class="secondary" onclick="showShift()">Назад</button></form>');
 }
 async function saveMoveStock(f,direction){
- if(activeShift?.vehicle_id)return alert('Операции с остатками машины пока не подключены');
  const qty=Number(f.qty.value);if(!Number.isInteger(qty)||qty<1)return alert('Введите количество');
  const b=f.querySelector('button');b.disabled=true;
- try{await shiftRpc('sales_map_move_stock',{p_product:f.product.value,p_qty:qty,p_direction:direction});await showShift()}catch(e){alert(e.message)}finally{b.disabled=false}
+ try{if(activeShift?.vehicle_id){const key=f.dataset.operationKey||(f.dataset.operationKey=crypto.randomUUID());await shiftRpc('sales_map_queue_transfer',{p_idempotency_key:key,p_product:f.product.value,p_qty:qty,p_direction:direction});alert('Заявка сохранена. Товар НЕ перемещён в МойСклад и остатки НЕ изменены.');}else{await shiftRpc('sales_map_move_stock',{p_product:f.product.value,p_qty:qty,p_direction:direction});}await showShift()}catch(e){alert(e.message)}finally{b.disabled=false}
 }
 async function finishShift(){
  if(!confirm('Завершить смену? Возврат товара необязателен, остатки останутся в машине.'))return;
