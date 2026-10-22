@@ -9,6 +9,9 @@ export default async function handler(req,res){
  res.setHeader('Cache-Control','no-store');
  if(req.method!=='POST')return res.status(405).json({error:'Method not allowed'});
  if(process.env.MOYSKLAD_TRANSFER_WRITE_ENABLED!=='true')return res.status(423).json({error:'Posting disabled'});
+ // Temporary single-operation allowlist: write flag alone is not enough.
+ const approvedTestId='dbd87e8e-8196-495c-9447-e5e7d761daae';
+ if(process.env.MOYSKLAD_TRANSFER_TEST_OPERATION_ID!==approvedTestId)return res.status(423).json({error:'Single-operation test not armed'});
  const id=String(req.body?.id||''),jwt=String(req.headers.authorization||'');
  if(!U.test(id)||!jwt.startsWith('Bearer '))return res.status(400).json({error:'Invalid request'});
  const url=process.env.SUPABASE_URL,anon=process.env.SUPABASE_ANON_KEY,service=process.env.SUPABASE_SERVICE_ROLE_KEY,token=process.env.MOYSKLAD_TOKEN,source=process.env.MOYSKLAD_WAREHOUSE_ID;
@@ -26,6 +29,7 @@ export default async function handler(req,res){
   const rows=await read(url+'/rest/v1/sales_map_moysklad_operations?id=eq.'+id+'&select=*',sh);
   const op=rows[0];
   if(!op||op.status!=='pending'||!P[op.product]||!V[op.vehicle_id]||!Number.isInteger(op.qty)||op.qty<1||!['load','return'].includes(op.direction))return res.status(409).json({error:'Invalid pending operation'});
+  if(op.id!==approvedTestId||op.vehicle_id!=='vehicle-1'||op.product!=='KU-001'||op.qty!==1||op.direction!=='load')return res.status(409).json({error:'Not the approved one-unit test'});
   const stores=(await read(B+'/entity/store?limit=1000',mh)).rows||[];
   const a=stores.filter(x=>x.id===source&&x.name==='Береке базар');
   const b=stores.filter(x=>x.name===V[op.vehicle_id]);
